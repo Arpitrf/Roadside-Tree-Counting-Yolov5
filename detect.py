@@ -57,6 +57,13 @@ def detect(opt):
     if device.type != 'cpu':
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
     t0 = time.time()
+
+    # Variables initialized for counting
+    tree_count = 0
+    double_count_iou_thresh = 0.5
+    next_frames_to_consider = 5
+    bbox_compare_dict = {}
+    
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -76,6 +83,13 @@ def detect(opt):
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
+        
+        # Reduce next_frames_to_consider in the bbox_compare_dict
+        if bool(bbox_compare_dict):
+            for key in list(bbox_compare_dict):
+                bbox_compare_dict[key] = bbox_compare_dict[key] - 1
+                if bbox_compare_dict[key] == 0:
+                    bbox_compare_dict.pop(key)
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -110,7 +124,8 @@ def detect(opt):
                     if save_img or opt.save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if opt.hide_labels else (names[c] if opt.hide_conf else f'{names[c]} {conf:.2f}')
-                        plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_thickness=opt.line_thickness)
+                        intermediate_count = plot_one_box(xyxy, im0, bbox_compare_dict, double_count_iou_thresh, next_frames_to_consider, label=label, color=colors(c, True), line_thickness=opt.line_thickness)
+                        tree_count = tree_count + intermediate_count
                         if opt.save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
 
@@ -145,6 +160,7 @@ def detect(opt):
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
         print(f"Results saved to {save_dir}{s}")
 
+    print("ANSWER: ", tree_count)
     print(f'Done. ({time.time() - t0:.3f}s)')
 
 
