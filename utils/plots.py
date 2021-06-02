@@ -17,7 +17,7 @@ import torch
 import yaml
 from PIL import Image, ImageDraw, ImageFont
 
-from utils.general import xywh2xyxy, xyxy2xywh
+from utils.general import xywh2xyxy, xyxy2xywh, counting_iou
 from utils.metrics import fitness
 
 # Settings
@@ -68,18 +68,50 @@ def butter_lowpass_filtfilt(data, cutoff=1500, fs=50000, order=5):
     return filtfilt(b, a, data)  # forward-backward filter
 
 
-def plot_one_box(x, im, color=(128, 128, 128), label=None, line_thickness=3):
+def plot_one_box(x, im, tree_count, bbox_compare_dict, double_count_iou_thresh, next_frames_to_consider, color=(255,102,255), label=None, line_thickness=2):
     # Plots one bounding box on image 'im' using OpenCV
     assert im.data.contiguous, 'Image not contiguous. Apply np.ascontiguousarray(im) to plot_on_box() input image.'
     tl = line_thickness or round(0.002 * (im.shape[0] + im.shape[1]) / 2) + 1  # line/font thickness
     c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
     cv2.rectangle(im, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    # Make counting range
+    mid = int(im.shape[1] / 2)
+    counting_range = int((0.04 * im.shape[1]) / 2)
+    left_limit = mid - counting_range
+    right_limit = mid + counting_range
+    overlay = im.copy()
+    cv2.rectangle(overlay, (left_limit, 0), (right_limit, im.shape[0]), (124,252,0), -1, lineType=cv2.LINE_AA)
+    im = cv2.addWeighted(overlay, 0.25, im, 0.75, 0, im)
+    # Some Initilizations
+    tree_value = 0
+    new_tree = True
+    # Check if bbox lies in counting range
+    bbox_mid_x = c1[0] + int((c2[0] - c1[0]) / 2)
+    bbox_mid_y = c1[1] + int((c2[1] - c1[1]) / 2)
+    cv2.drawMarker(im, (bbox_mid_x, bbox_mid_y), color=color, thickness=2)
+    if bbox_mid_x >= left_limit and bbox_mid_x <= right_limit:
+        curr_box = (c1[0], c1[1], c2[0], c2[1])
+        if not bool(bbox_compare_dict):
+            bbox_compare_dict[curr_box] = next_frames_to_consider
+            tree_value = 1
+        else:
+            for key, value in bbox_compare_dict.items():
+                iou = counting_iou(curr_box, key, im.shape[1], im.shape[0])
+                print("IOU: ", iou)
+                if iou > double_count_iou_thresh:
+                    new_tree = False
+                    break
+            if new_tree == True:
+                bbox_compare_dict[curr_box] = next_frames_to_consider
+                tree_value = 1
+
     if label:
         tf = max(tl - 1, 1)  # font thickness
         t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
         c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
         cv2.rectangle(im, c1, c2, color, -1, cv2.LINE_AA)  # filled
         cv2.putText(im, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+    return tree_value
 
 
 def plot_one_box_PIL(box, im, color=(128, 128, 128), label=None, line_thickness=None):

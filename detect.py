@@ -57,13 +57,10 @@ def detect(opt):
     if device.type != 'cpu':
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
     t0 = time.time()
-
-    # Variables initialized for counting
     tree_count = 0
     double_count_iou_thresh = 0.5
     next_frames_to_consider = 5
     bbox_compare_dict = {}
-    
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -124,8 +121,14 @@ def detect(opt):
                     if save_img or opt.save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
                         label = None if opt.hide_labels else (names[c] if opt.hide_conf else f'{names[c]} {conf:.2f}')
-                        intermediate_count = plot_one_box(xyxy, im0, bbox_compare_dict, double_count_iou_thresh, next_frames_to_consider, label=label, color=colors(c, True), line_thickness=opt.line_thickness)
+                        intermediate_count = plot_one_box(xyxy, im0, tree_count, bbox_compare_dict, double_count_iou_thresh, next_frames_to_consider, label=label)
                         tree_count = tree_count + intermediate_count
+                        # Display tree_count
+                        font_size = im0.shape[0] / 500
+                        text = "Tree Count: " + str(tree_count)
+                        bottom_margin = 0.05 * im0.shape[0] 
+                        left_margin = 0.35 * im0.shape[1]
+                        cv2.putText(im0, text, (int(left_margin), int(im0.shape[0] - bottom_margin)), cv2.FONT_HERSHEY_SIMPLEX, font_size, (0,0,0), int(2*font_size), cv2.LINE_AA)
                         if opt.save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
 
@@ -186,7 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--line-thickness', default=3, type=int, help='bounding box thickness (pixels)')
-    parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
+    parser.add_argument('--hide-labels', default=True, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     opt = parser.parse_args()
     print(opt)
