@@ -79,9 +79,6 @@ def plot_one_box(x, im, tree_count, bbox_compare_dict, double_count_iou_thresh, 
     counting_range = int((0.04 * im.shape[1]) / 2)
     left_limit = mid - counting_range
     right_limit = mid + counting_range
-    overlay = im.copy()
-    cv2.rectangle(overlay, (left_limit, 0), (right_limit, im.shape[0]), (124,252,0), -1, lineType=cv2.LINE_AA)
-    im = cv2.addWeighted(overlay, 0.25, im, 0.75, 0, im)
     # Some Initilizations
     tree_value = 0
     new_tree = True
