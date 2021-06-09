@@ -53,22 +53,17 @@ def get_latest_run(search_dir='.'):
 
 
 def is_docker():
-    # Is environment a Docker container?
+    # Is environment a Docker container
     return Path('/workspace').exists()  # or Path('/.dockerenv').exists()
 
 
 def is_colab():
-    # Is environment a Google Colab instance?
+    # Is environment a Google Colab instance
     try:
         import google.colab
         return True
     except Exception as e:
         return False
-
-
-def is_pip():
-    # Is file in a pip package?
-    return 'site-packages' in Path(__file__).absolute().parts
 
 
 def emojis(str=''):
@@ -178,19 +173,12 @@ def check_imshow():
 
 
 def check_file(file):
-    # Search/download file (if necessary) and return path
-    file = str(file)  # convert to str()
-    if Path(file).is_file() or file == '':  # exists
+    # Search for file if not found
+    if Path(file).is_file() or file == '':
         return file
-    elif file.startswith(('http://', 'https://')):  # download
-        url, file = file, Path(file).name
-        print(f'Downloading {url} to {file}...')
-        torch.hub.download_url_to_file(url, file)
-        assert Path(file).exists() and Path(file).stat().st_size > 0, f'File download failed: {url}'  # check
-        return file
-    else:  # search
+    else:
         files = glob.glob('./**/' + file, recursive=True)  # find file
-        assert len(files), f'File not found: {file}'  # assert file was found
+        assert len(files), f'File Not Found: {file}'  # assert file was found
         assert len(files) == 1, f"Multiple files match '{file}', specify exact path: {files}"  # assert unique
         return files[0]  # return file
 
@@ -417,6 +405,37 @@ def clip_coords(boxes, img_shape):
     boxes[:, 2].clamp_(0, img_shape[1])  # x2
     boxes[:, 3].clamp_(0, img_shape[0])  # y2
 
+
+def counting_iou(curr_box, prev_box, img_width, img_height):
+    img_mid_x = int(img_width / 2)
+    img_mid_y = int(img_height / 2)
+    
+    # Get the box coordinates (xyxy) with centre: (img_w/2, img_h/2) for the current box
+    curr_w = abs(curr_box[0] - curr_box[2]) 
+    curr_h = abs(curr_box[1] - curr_box[3])
+    new_curr_x1 = img_mid_x - int(curr_w / 2)
+    new_curr_y1 = img_mid_y - int(curr_h / 2)
+    new_curr_x2 = img_mid_x + int(curr_w / 2)
+    new_curr_y2 = img_mid_y + int(curr_h / 2)
+    
+    # Get the box coordinates (xyxy) with centre: (img_w/2, img_h/2) for the previous box
+    prev_w = abs(prev_box[0] - prev_box[2])
+    prev_h = abs(prev_box[1] - prev_box[3])
+    new_prev_x1 = img_mid_x - int(prev_w / 2)
+    new_prev_y1 = img_mid_y - int(prev_h / 2)
+    new_prev_x2 = img_mid_x + int(prev_w / 2)
+    new_prev_y2 = img_mid_y + int(prev_h / 2)
+
+    # Calculating the coordinates of intersection area
+    x1 = max(new_curr_x1, new_prev_x1)
+    y1 = max(new_curr_y1, new_prev_y1)
+    x2 = min(new_curr_x2, new_prev_x2)
+    y2 = min(new_curr_y2, new_prev_y2)
+
+    intersection = max(0, x2 - x1) * max(0, y2 - y1)
+    curr_area = curr_w * curr_h
+    prev_area = prev_w * prev_h
+    return intersection / (curr_area + prev_area - intersection + 1e-6)
 
 def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
     # Returns the IoU of box1 to box2. box1 is 4, box2 is nx4
